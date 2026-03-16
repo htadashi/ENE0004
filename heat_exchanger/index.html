@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Demo de Controle de Temperatura de Trocador de Calor</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="page">
+      <header class="page-header">
+        <h1>Controle de Temperatura de Trocador de Calor</h1>
+        <p>
+          Um demo interativo simples de controle por realimentação PI. O
+          controlador ajusta a válvula de aquecimento para manter a
+          temperatura de saída próxima do valor de referência quando as
+          condições de alimentação mudam.
+        </p>
+      </header>
+
+      <div class="layout">
+        <section class="panel">
+          <h2>Controles</h2>
+
+          <div class="button-row">
+            <button id="run-toggle" type="button">Pausar</button>
+            <button id="reset-button" type="button">Reiniciar</button>
+          </div>
+
+          <div class="button-row">
+            <button id="disturbance-cold" type="button">Alimentação mais fria</button>
+            <button id="disturbance-flow" type="button">Maior vazão</button>
+            <button id="recover-button" type="button">Condição nominal</button>
+          </div>
+
+          <div class="control-group">
+            <label for="controller-mode">Modo do controlador</label>
+            <select id="controller-mode">
+              <option value="auto" selected>PI automático</option>
+              <option value="manual">Válvula manual</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label for="setpoint">
+              Referência de temperatura
+              <span id="setpoint-value">85 C</span>
+            </label>
+            <input id="setpoint" type="range" min="55" max="110" step="1" value="85" />
+          </div>
+
+          <div class="control-group">
+            <label for="inlet-temp">
+              Temperatura de entrada
+              <span id="inlet-temp-value">40 C</span>
+            </label>
+            <input id="inlet-temp" type="range" min="20" max="70" step="1" value="40" />
+          </div>
+
+          <div class="control-group">
+            <label for="flow-factor">
+              Fator de vazão
+              <span id="flow-factor-value">1.00 x</span>
+            </label>
+            <input id="flow-factor" type="range" min="0.70" max="1.60" step="0.01" value="1.00" />
+          </div>
+
+          <div class="control-group">
+            <label for="kp">
+              Kp
+              <span id="kp-value">2.0</span>
+            </label>
+            <input id="kp" type="range" min="0.2" max="5.0" step="0.1" value="2.0" />
+          </div>
+
+          <div class="control-group">
+            <label for="ki">
+              Ki
+              <span id="ki-value">0.10</span>
+            </label>
+            <input id="ki" type="range" min="0.00" max="0.30" step="0.01" value="0.10" />
+          </div>
+
+          <div class="control-group">
+            <label for="tau">
+              Constante de tempo do processo
+              <span id="tau-value">18 s</span>
+            </label>
+            <input id="tau" type="range" min="6" max="35" step="1" value="18" />
+          </div>
+
+          <div class="control-group">
+            <label for="manual-valve">
+              Abertura manual da válvula
+              <span id="manual-valve-value">50 %</span>
+            </label>
+            <input id="manual-valve" type="range" min="0" max="100" step="1" value="50" />
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Valores atuais</h2>
+
+          <table class="status-table">
+            <tbody>
+              <tr>
+                <th>Temperatura de saída</th>
+                <td id="outlet-value">85.0 C</td>
+              </tr>
+              <tr>
+                <th>Abertura da válvula</th>
+                <td id="valve-value">50.0 %</td>
+              </tr>
+              <tr>
+                <th>Erro de controle</th>
+                <td id="error-value">0.0 C</td>
+              </tr>
+              <tr>
+                <th>Fator de vazão</th>
+                <td id="flow-value">1.00 x</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <p id="status-text" class="status-text">
+            O modo automático usa realimentação PI para mover a válvula quando
+            a temperatura de saída se afasta da referência.
+          </p>
+
+          <div class="chart-block">
+            <h3>Resposta de temperatura</h3>
+            <p class="chart-note">Referência e temperatura de saída ao longo do tempo.</p>
+            <canvas id="temperature-chart" width="760" height="280"></canvas>
+          </div>
+
+          <div class="chart-block">
+            <h3>Resposta da válvula</h3>
+            <p class="chart-note">Comando de válvula enviado pelo controlador.</p>
+            <canvas id="valve-chart" width="760" height="200"></canvas>
+          </div>
+        </section>
+      </div>
+
+      <section class="panel notes-panel">
+        <h2>O que observar</h2>
+        <ul>
+          <li>Clique em <strong>Alimentação mais fria</strong> ou <strong>Maior vazão</strong> para criar uma perturbação.</li>
+          <li>No modo automático, o controlador deve mover a válvula para trazer a temperatura de saída de volta.</li>
+          <li>No modo manual, a temperatura de saída permanece fora da referência até você mover a válvula.</li>
+          <li>Kp maior acelera a resposta. Ki maior remove o desvio permanente, mas pode deixar a resposta menos suave.</li>
+        </ul>
+      </section>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>
