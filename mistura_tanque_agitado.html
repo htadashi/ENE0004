@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulação de Mistura em Tanque Agitado (CSTR)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #f5f5f5;
+    color: #222;
+    font-family: sans-serif;
+    font-size: 14px;
+  }
+
+  header {
+    background: #fff;
+    border-bottom: 1px solid #ddd;
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  header h1 { font-size: 18px; font-weight: 600; }
+  header .sim-time { margin-left: auto; font-family: monospace; font-size: 13px; color: #555; }
+
+  .main-grid {
+    display: grid;
+    grid-template-columns: 280px 1fr 280px;
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .panel {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 14px;
+  }
+
+  .panel-title {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #666;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #eee;
+  }
+
+  .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: #888;
+    margin: 10px 0 6px;
+  }
+
+  .ctrl-group { margin-bottom: 10px; }
+
+  .ctrl-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    color: #444;
+    margin-bottom: 3px;
+  }
+
+  .ctrl-label .val {
+    font-family: monospace;
+    color: #111;
+    min-width: 38px;
+    text-align: right;
+  }
+
+  input[type=range] { width: 100%; cursor: pointer; accent-color: #3a7bd5; }
+
+  hr { border: none; border-top: 1px solid #eee; margin: 10px 0; }
+
+  .btn-row { display: flex; gap: 8px; margin-top: 10px; }
+
+  button {
+    flex: 1;
+    padding: 8px 0;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    background: #fff;
+    font-size: 13px;
+    cursor: pointer;
+    color: #333;
+  }
+  button:hover { background: #f0f0f0; }
+  button.primary { background: #3a7bd5; color: #fff; border-color: #3a7bd5; }
+  button.primary:hover { background: #2d68c0; }
+  button.stop { background: #c0392b; color: #fff; border-color: #c0392b; }
+  button.stop:hover { background: #a93226; }
+
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .metric-card {
+    background: #f9f9f9;
+    border: 1px solid #e0e0e0;
+    border-radius: 3px;
+    padding: 8px 10px;
+  }
+  .metric-card .m-label { font-size: 10px; color: #888; margin-bottom: 2px; }
+  .metric-card .m-value { font-family: monospace; font-size: 18px; color: #111; }
+  .metric-card .m-unit  { font-size: 10px; color: #aaa; }
+
+  .viz-panel {
+    grid-column: 2;
+    grid-row: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 420px;
+  }
+
+  canvas#tankCanvas { display: block; }
+
+  .eq-box {
+    background: #f9f9f9;
+    border: 1px solid #e0e0e0;
+    border-radius: 3px;
+    padding: 8px 10px;
+    font-family: monospace;
+    font-size: 11px;
+    line-height: 1.9;
+    color: #555;
+    margin-top: 10px;
+  }
+
+  .ss-box {
+    background: #f0f7ff;
+    border: 1px solid #c5d9f0;
+    border-radius: 3px;
+    padding: 8px 10px;
+    font-family: monospace;
+    font-size: 12px;
+    line-height: 1.8;
+    margin-top: 8px;
+  }
+  .ss-box .ss-title {
+    font-size: 10px; color: #888;
+    font-family: sans-serif;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .plots-panel { grid-column: 1 / -1; grid-row: 2; }
+  .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .chart-wrap { position: relative; height: 180px; }
+  .chart-label { font-size: 11px; color: #888; font-weight: 600; text-transform: uppercase; margin-bottom: 4px; }
+
+
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Simulação de Mistura em Tanque Agitado (CSTR)</h1>
+  <span class="sim-time" id="simTimeDisplay">t = 0.000 min</span>
+</header>
+
+<div class="main-grid">
+
+  <!-- LEFT: Inlet controls -->
+  <div class="panel">
+    <div class="panel-title">Parâmetros de Entrada</div>
+
+    <div class="section-label" style="color:#3a7bd5;">Corrente 1</div>
+    <div class="ctrl-group">
+      <div class="ctrl-label"><span>Vazão w₁ (kg/min)</span><span class="val" id="v_w1">1.00</span></div>
+      <input type="range" id="s_w1" min="0" max="5" step="0.05" value="1.0">
+    </div>
+    <div class="ctrl-group">
+      <div class="ctrl-label"><span>Composição x₁ de <i>A</i> na corrente 1</span><span class="val" id="v_x1">0.80</span></div>
+      <input type="range" id="s_x1" min="0" max="1" step="0.01" value="0.8">
+    </div>
+
+    <hr>
+    <div class="section-label" style="color:#c0392b;">Corrente 2</div>
+    <div class="ctrl-group">
+      <div class="ctrl-label"><span>Vazão w₂ (kg/min)</span><span class="val" id="v_w2">1.00</span></div>
+      <input type="range" id="s_w2" min="0" max="5" step="0.05" value="1.0">
+    </div>
+    <div class="ctrl-group">
+      <div class="ctrl-label"><span>Composição x₂ de <i>A</i> na corrente 2</span><span class="val" id="v_x2">0.20</span></div>
+      <input type="range" id="s_x2" min="0" max="1" step="0.01" value="0.2">
+    </div>
+
+    <hr>
+    <div class="section-label" style="color:#27ae60;">Saída</div>
+    <div class="ctrl-group">
+      <div class="ctrl-label"><span>Vazão w (kg/min)</span><span class="val" id="v_w">2.00</span></div>
+      <input type="range" id="s_w" min="0" max="6" step="0.05" value="2.0">
+    </div>
+
+
+  </div>
+
+  <!-- CENTER: Canvas -->
+  <div class="panel viz-panel">
+    <canvas id="tankCanvas" width="440" height="400"></canvas>
+  </div>
+
+  <!-- RIGHT: State, ICs, controls -->
+  <div class="panel">
+    <div class="panel-title">Estado do Sistema</div>
+
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="m-label">Composição x(t)</div>
+        <div class="m-value" id="m_x">0.5000</div>
+        <div class="m-unit">fração mássica</div>
+      </div>
+      <div class="metric-card">
+        <div class="m-label">Volume V(t)</div>
+        <div class="m-value" id="m_V">2.000</div>
+        <div class="m-unit">m³</div>
+      </div>
+      <div class="metric-card">
+        <div class="m-label">Tempo</div>
+        <div class="m-value" id="m_t">0.000</div>
+        <div class="m-unit">min</div>
+      </div>
+
+    </div>
+
+    <hr>
+    <div class="section-label">Condições Iniciais</div>
+    <div class="ctrl-group">
+      <div class="ctrl-label"><span>x(0)</span><span class="val" id="v_x0">0.50</span></div>
+      <input type="range" id="s_x0" min="0" max="1" step="0.01" value="0.5">
+    </div>
+    <div class="ctrl-group">
+      <div class="ctrl-label"><span>V(0) (m³)</span><span class="val" id="v_V0">2.00</span></div>
+      <input type="range" id="s_V0" min="0.5" max="8" step="0.1" value="2.0">
+    </div>
+
+
+    <hr>
+    <div class="btn-row">
+      <button class="primary" id="btnStartPause" onclick="toggleRun()">Iniciar</button>
+      <button onclick="resetSim()">Reiniciar</button>
+    </div>
+
+    <div class="ss-box">
+      <div class="ss-title">Estado estacionário (analítico)</div>
+      x_ss = <strong id="ss_x">—</strong><br>
+    </div>
+
+    <div class="eq-box">
+      dV/dt  = w₁ + w₂ − w<br>
+      d(Vx)/dt = w₁x₁ + w₂x₂ − wx<br>
+      x_ss = (w₁x₁ + w₂x₂) / w
+    </div>
+  </div>
+
+  <!-- BOTTOM: Charts -->
+  <div class="panel plots-panel">
+    <div class="panel-title">Histórico do Processo</div>
+    <div class="chart-row">
+      <div>
+        <div class="chart-label">Composição x(t)</div>
+        <div class="chart-wrap"><canvas id="chartX"></canvas></div>
+      </div>
+      <div>
+        <div class="chart-label">Volume V(t)</div>
+        <div class="chart-wrap"><canvas id="chartV"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ============================================================
+// STATE
+// ============================================================
+const MAX_HISTORY = 400;
+const DT_SIM = 0.005; // simulation timestep (min)
+
+let state = {
+  t: 0, x: 0.5, V: 2.0,
+  running: false, varVol: true, speed: 1,
+  w1: 1.0, x1: 0.8,
+  w2: 1.0, x2: 0.2,
+  w:  2.0,
+  x0: 0.5, V0: 2.0,
+  tHist: [], xHist: [], VHist: [],
+};
+
+// ============================================================
+// SLIDER WIRING
+// ============================================================
+function wire(sid, did, key) {
+  const sl = document.getElementById(sid);
+  const dp = document.getElementById(did);
+  sl.addEventListener('input', () => {
+    state[key] = parseFloat(sl.value);
+    dp.textContent = state[key].toFixed(2);
+    updateSteadyState();
+  });
+}
+wire('s_w1','v_w1','w1'); wire('s_x1','v_x1','x1');
+wire('s_w2','v_w2','w2'); wire('s_x2','v_x2','x2');
+wire('s_w', 'v_w', 'w');
+wire('s_x0','v_x0','x0'); wire('s_V0','v_V0','V0');
+
+// ============================================================
+// SIMULATION — RK4
+// ============================================================
+function derivatives(V, x, p) {
+  const w_out = p.varVol ? p.w : (p.w1 + p.w2);
+  const dVdt  = p.w1 + p.w2 - w_out;
+  const dxdt  = (p.w1*p.x1 + p.w2*p.x2 - w_out*x - x*dVdt) / Math.max(V, 0.01);
+  return { dVdt, dxdt };
+}
+
+function stepRK4(dt) {
+  const p = { w1:state.w1, x1:state.x1, w2:state.w2, x2:state.x2, w:state.w, varVol:state.varVol };
+  const { V, x } = state;
+  const k1 = derivatives(V,               x,               p);
+  const k2 = derivatives(V+dt/2*k1.dVdt,  x+dt/2*k1.dxdt,  p);
+  const k3 = derivatives(V+dt/2*k2.dVdt,  x+dt/2*k2.dxdt,  p);
+  const k4 = derivatives(V+dt  *k3.dVdt,  x+dt  *k3.dxdt,  p);
+  state.V = Math.max(0.01, V + dt/6*(k1.dVdt + 2*k2.dVdt + 2*k3.dVdt + k4.dVdt));
+  state.x = Math.min(1, Math.max(0, x + dt/6*(k1.dxdt + 2*k2.dxdt + 2*k3.dxdt + k4.dxdt)));
+  state.t += dt;
+}
+
+function updateSteadyState() {
+  const w_out = state.varVol ? state.w : (state.w1 + state.w2);
+  const ss_x  = w_out > 0 ? (state.w1*state.x1 + state.w2*state.x2) / w_out : null;
+  document.getElementById('ss_x').textContent = ss_x !== null ? ss_x.toFixed(4) : '—';
+  document.getElementById('ss_V').textContent = state.varVol ? '(dynamic)' : state.V0.toFixed(2);
+}
+
+// ============================================================
+// CHARTS
+// ============================================================
+const scaleOpts = {
+  grid:  { color: '#eee' },
+  ticks: { color: '#888', font: { size: 10 } }
+};
+
+const chartX = new Chart(document.getElementById('chartX'), {
+  type: 'line',
+  data: { datasets: [{ data: [], borderColor: '#3a7bd5', borderWidth: 1.5, pointRadius: 0, tension: 0.2 }] },
+  options: {
+    animation: false, responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { type: 'linear', ...scaleOpts, title: { display: true, text: 'tempo (min)', color: '#888', font: { size: 10 } } },
+      y: { ...scaleOpts, min: 0, max: 1, title: { display: true, text: 'x', color: '#888', font: { size: 10 } } }
+    }
+  }
+});
+
+const chartV = new Chart(document.getElementById('chartV'), {
+  type: 'line',
+  data: { datasets: [{ data: [], borderColor: '#e67e22', borderWidth: 1.5, pointRadius: 0, tension: 0.2 }] },
+  options: {
+    animation: false, responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { type: 'linear', ...scaleOpts, title: { display: true, text: 'tempo (min)', color: '#888', font: { size: 10 } } },
+      y: { ...scaleOpts, title: { display: true, text: 'V (m³)', color: '#888', font: { size: 10 } } }
+    }
+  }
+});
+
+function pushHistory() {
+  state.tHist.push(+state.t.toFixed(4));
+  state.xHist.push(+state.x.toFixed(5));
+  state.VHist.push(+state.V.toFixed(4));
+  if (state.tHist.length > MAX_HISTORY) {
+    state.tHist.shift(); state.xHist.shift(); state.VHist.shift();
+  }
+  const tMin = state.tHist.length > 0 ? state.tHist[0] : 0;
+  const tMax = state.tHist.length > 0 ? state.tHist[state.tHist.length - 1] : 1;
+  chartX.data.datasets[0].data = state.tHist.map((t,i) => ({x:t, y:state.xHist[i]}));
+  chartV.data.datasets[0].data = state.tHist.map((t,i) => ({x:t, y:state.VHist[i]}));
+  chartX.options.scales.x.min = tMin;
+  chartX.options.scales.x.max = tMax;
+  chartV.options.scales.x.min = tMin;
+  chartV.options.scales.x.max = tMax;
+  chartX.update('none');
+  chartV.update('none');
+}
+
+// ============================================================
+// CANVAS DRAWING
+// ============================================================
+const canvas = document.getElementById('tankCanvas');
+const ctx    = canvas.getContext('2d');
+let stirAngle = 0;
+
+// Simple flow particles
+const particles = { in1: [], in2: [] };
+
+function spawnParticles() {
+  if (state.w1 > 0 && particles.in1.length < 12)
+    particles.in1.push({ x: 88, y: 40, life: 1.0, sp: 0.4 + state.w1 * 0.15 });
+  if (state.w2 > 0 && particles.in2.length < 12)
+    particles.in2.push({ x: 352, y: 40, life: 1.0, sp: 0.4 + state.w2 * 0.15 });
+}
+
+// x → blue-to-red color
+function xToColor(x) {
+  const r = Math.round(x * 200);
+  const g = Math.round(100 - x * 50);
+  const b = Math.round(200 - x * 150);
+  return `rgb(${r},${g},${b})`;
+}
+
+function drawTank() {
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  const tankX = 130, tankY = 70;
+  const tankW = 180, tankMaxH = 240;
+  const V_MAX = 8.0;
+
+  const fillFrac = Math.min(1, state.V / V_MAX);
+  const fillH    = fillFrac * tankMaxH;
+  const fillY    = tankY + tankMaxH - fillH;
+  const fillColor = xToColor(state.x);
+
+  // ---- Inlet pipes ----
+  ctx.lineWidth = 5; ctx.lineCap = 'round';
+  ctx.strokeStyle = '#3a7bd5';
+  ctx.beginPath(); ctx.moveTo(62, 52); ctx.lineTo(tankX, 112); ctx.stroke();
+
+  ctx.strokeStyle = '#c0392b';
+  ctx.beginPath(); ctx.moveTo(378, 52); ctx.lineTo(tankX + tankW, 112); ctx.stroke();
+
+  // Arrowheads
+  function arrowHead(tx, ty, fx, fy, color) {
+    const ang = Math.atan2(ty - fy, tx - fx);
+    ctx.fillStyle = color;
+    ctx.save(); ctx.translate(tx, ty); ctx.rotate(ang);
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(-11,-5); ctx.lineTo(-11,5); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+  arrowHead(tankX, 112, 62, 52, '#3a7bd5');
+  arrowHead(tankX + tankW, 112, 378, 52, '#c0392b');
+
+  // ---- Stream labels ----
+  ctx.font = '12px sans-serif';
+  ctx.fillStyle = '#3a7bd5'; ctx.textAlign = 'left';
+  ctx.fillText(`w₁ = ${state.w1.toFixed(2)}`, 8, 40);
+  ctx.fillText(`x₁ = ${state.x1.toFixed(2)}`, 8, 55);
+
+  ctx.fillStyle = '#c0392b'; ctx.textAlign = 'right';
+  ctx.fillText(`w₂ = ${state.w2.toFixed(2)}`, W - 8, 40);
+  ctx.fillText(`x₂ = ${state.x2.toFixed(2)}`, W - 8, 55);
+  ctx.textAlign = 'left';
+
+  // ---- Tank body ----
+  // Liquid fill
+  if (fillH > 1) {
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = fillColor;
+    ctx.fillRect(tankX + 1, fillY, tankW - 2, fillH - 1);
+    ctx.globalAlpha = 1;
+  }
+
+  // Tank wall
+  ctx.strokeStyle = '#555'; ctx.lineWidth = 2;
+  ctx.strokeRect(tankX, tankY, tankW, tankMaxH);
+
+  // Volume tick marks
+  ctx.strokeStyle = '#bbb'; ctx.lineWidth = 1;
+  ctx.font = '9px monospace'; ctx.fillStyle = '#999';
+  for (let i = 1; i < 4; i++) {
+    const ly = tankY + tankMaxH - i * tankMaxH / 4;
+    ctx.beginPath(); ctx.moveTo(tankX + tankW, ly); ctx.lineTo(tankX + tankW + 6, ly); ctx.stroke();
+    ctx.fillText((i * V_MAX / 4).toFixed(0), tankX + tankW + 9, ly + 3);
+  }
+  
+  // ---- Stirrer ----
+  const stirX = tankX + tankW / 2;
+  const stirY = tankY + tankMaxH * 0.5;
+
+  // Shaft
+  ctx.strokeStyle = '#aaa'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(stirX, tankY - 14); ctx.lineTo(stirX, stirY); ctx.stroke();
+
+  // Motor box
+  ctx.fillStyle = '#f0f0f0'; ctx.strokeStyle = '#aaa'; ctx.lineWidth = 1.5;
+  ctx.fillRect(stirX - 13, tankY - 28, 26, 16);
+  ctx.strokeRect(stirX - 13, tankY - 28, 26, 16);
+  ctx.fillStyle = '#555'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('M', stirX, tankY - 17);
+  ctx.textAlign = 'left';
+
+  // Blades (rotate)
+  ctx.save();
+  ctx.translate(stirX, stirY); ctx.rotate(stirAngle);
+  for (let i = 0; i < 4; i++) {
+    ctx.rotate(Math.PI / 2);
+    ctx.globalAlpha = 0.65;
+    ctx.fillStyle = fillColor;
+    ctx.strokeStyle = '#888'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.ellipse(24, 0, 20, 5, 0, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+
+  // ---- Outlet pipe ----
+  const outX = tankX + tankW / 2;
+  ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 5;
+  ctx.beginPath(); ctx.moveTo(outX, tankY + tankMaxH); ctx.lineTo(outX, tankY + tankMaxH + 50); ctx.stroke();
+
+  // Arrowhead down
+  ctx.fillStyle = '#27ae60';
+  ctx.beginPath();
+  ctx.moveTo(outX, tankY + tankMaxH + 55);
+  ctx.lineTo(outX - 6, tankY + tankMaxH + 45);
+  ctx.lineTo(outX + 6, tankY + tankMaxH + 45);
+  ctx.closePath(); ctx.fill();
+
+  // Outlet label
+  const w_out = state.varVol ? state.w : (state.w1 + state.w2);
+  ctx.fillStyle = '#27ae60'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText(`w = ${w_out.toFixed(2)},  x = ${state.x.toFixed(3)}`, outX, tankY + tankMaxH + 72);
+  ctx.textAlign = 'left';
+
+
+
+  // ---- Flow particles ----
+  particles.in1 = particles.in1.filter(p => p.life > 0);
+  particles.in1.forEach(p => {
+    p.x += p.sp * 2.1; p.y += p.sp * 1.2; p.life -= 0.04;
+    ctx.globalAlpha = p.life * 0.7;
+    ctx.fillStyle = '#3a7bd5';
+    ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill();
+  });
+  particles.in2 = particles.in2.filter(p => p.life > 0);
+  particles.in2.forEach(p => {
+    p.x -= p.sp * 2.1; p.y += p.sp * 1.2; p.life -= 0.04;
+    ctx.globalAlpha = p.life * 0.7;
+    ctx.fillStyle = '#c0392b';
+    ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+}
+
+// ============================================================
+// ANIMATION LOOP
+// ============================================================
+let lastTs = null;
+
+function animLoop(ts) {
+  if (!state.running) { lastTs = null; return; }
+  if (!lastTs) lastTs = ts;
+  const elapsed = (ts - lastTs) / 1000;
+  lastTs = ts;
+
+  const simElapsed = elapsed * state.speed;
+  const steps = Math.max(1, Math.ceil(simElapsed / DT_SIM));
+  const dt = simElapsed / steps;
+  for (let i = 0; i < steps; i++) stepRK4(dt);
+
+  stirAngle += 0.05 * state.speed;
+  spawnParticles();
+
+  document.getElementById('m_x').textContent = state.x.toFixed(4);
+  document.getElementById('m_V').textContent = state.V.toFixed(3);
+  document.getElementById('m_t').textContent = state.t.toFixed(3);
+  document.getElementById('simTimeDisplay').textContent = `t = ${state.t.toFixed(3)} min`;
+
+  pushHistory();
+  drawTank();
+  requestAnimationFrame(animLoop);
+}
+
+// Idle stirrer animation while paused
+(function idle() {
+  if (!state.running) { stirAngle += 0.008; drawTank(); }
+  requestAnimationFrame(idle);
+})();
+
+// ============================================================
+// CONTROLS
+// ============================================================
+function toggleRun() {
+  state.running = !state.running;
+  const btn = document.getElementById('btnStartPause');
+  if (state.running) {
+    btn.textContent = 'Pausar'; btn.className = 'stop';
+    requestAnimationFrame(animLoop);
+  } else {
+    btn.textContent = 'Iniciar'; btn.className = 'primary';
+  }
+}
+
+function resetSim() {
+  state.running = false;
+  document.getElementById('btnStartPause').textContent = 'Iniciar';
+  document.getElementById('btnStartPause').className = 'primary';
+  state.t = 0; state.x = state.x0; state.V = state.V0;
+  state.tHist = []; state.xHist = []; state.VHist = [];
+  particles.in1 = []; particles.in2 = [];
+  chartX.data.datasets[0].data = [];
+  chartV.data.datasets[0].data = [];
+  chartX.update('none'); chartV.update('none');
+  document.getElementById('m_x').textContent = state.x.toFixed(4);
+  document.getElementById('m_V').textContent = state.V.toFixed(3);
+  document.getElementById('m_t').textContent = '0.000';
+  document.getElementById('simTimeDisplay').textContent = 't = 0.000 min';
+  updateSteadyState(); drawTank();
+}
+
+
+
+// ============================================================
+// INIT
+// ============================================================
+updateSteadyState();
+drawTank();
+</script>
+</body>
+</html>
