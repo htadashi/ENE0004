@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lugar das Raízes - Regra do Eixo Real</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            text-align: center;
+            background-color: #f9fafb;
+            color: #333;
+            margin: 0;
+            padding: 40px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+        h2 { margin-top: 0; color: #1f2937; }
+        .controls {
+            margin: 20px 0;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            border: 2px solid #e5e7eb;
+            background-color: white;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        button:hover { background-color: #f3f4f6; }
+        button.active-pole { border-color: #3b82f6; background-color: #eff6ff; color: #1d4ed8; }
+        button.active-zero { border-color: #10b981; background-color: #ecfdf5; color: #047857; }
+        
+        .canvas-container {
+            position: relative;
+            margin-top: 20px;
+        }
+        canvas {
+            border: 1px solid #e5e7eb;
+            background-color: #ffffff;
+            border-radius: 8px;
+            cursor: crosshair;
+        }
+        #tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            pointer-events: none;
+            display: none;
+            transform: translate(-50%, -100%);
+            margin-top: -10px;
+        }
+        .instructions {
+            color: #6b7280;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Visualização da Regra do Eixo Real</h2>
+    <p class="instructions">Selecione um modo e clique no eixo para posicionar Pólos (X) ou Zeros (O). Segmentos com um número ímpar de raízes à direita são destacados em vermelho.</p>
+    
+    <div class="controls">
+        <button id="btnPole" onclick="setMode('pole')">Adicionar Pólo (X)</button>
+        <button id="btnZero" onclick="setMode('zero')">Adicionar Zero (O)</button>
+        <button onclick="clearAll()" style="border-color: #ef4444; color: #ef4444;">Limpar Tudo</button>
+    </div>
+
+    <div class="canvas-container">
+        <div id="tooltip">0 raízes à direita</div>
+        <canvas id="lgrCanvas" width="800" height="150"></canvas>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('lgrCanvas');
+    const ctx = canvas.getContext('2d');
+    const tooltip = document.getElementById('tooltip');
+    
+    let elements = []; // Array to store { type: 'pole'|'zero', val: float }
+    let mode = null;
+
+    // Viewport mapping: Real axis from -10 to +10
+    const minVal = -10;
+    const maxVal = 10;
+    
+    function valToX(val) {
+        return ((val - minVal) / (maxVal - minVal)) * canvas.width;
+    }
+
+    function xToVal(x) {
+        return (x / canvas.width) * (maxVal - minVal) + minVal;
+    }
+
+    function setMode(newMode) {
+        mode = newMode;
+        document.getElementById('btnPole').className = mode === 'pole' ? 'active-pole' : '';
+        document.getElementById('btnZero').className = mode === 'zero' ? 'active-zero' : '';
+    }
+
+    function clearAll() {
+        elements = [];
+        draw();
+    }
+
+    // Handle mouse movement for the tooltip
+    canvas.addEventListener('mousemove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const val = xToVal(x);
+        
+        // Count elements strictly to the right
+        const countRight = elements.filter(el => el.val > val).length;
+        
+        tooltip.style.display = 'block';
+        tooltip.style.left = `${x}px`;
+        tooltip.style.top = `${e.clientY - rect.top}px`;
+        const text = countRight === 1 ? `${countRight} raiz à direita` : `${countRight} raízes à direita`;
+        tooltip.innerText = text;
+    });
+
+    canvas.addEventListener('mouseleave', () => {
+        tooltip.style.display = 'none';
+    });
+
+    // Handle clicks to add elements
+    canvas.addEventListener('mousedown', (e) => {
+        if (!mode) {
+            alert("Por favor, selecione 'Adicionar Pólo' ou 'Adicionar Zero' primeiro.");
+            return;
+        }
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        let val = xToVal(x);
+        
+        // Snap to nearest integer if close enough (for easier use)
+        if (Math.abs(val - Math.round(val)) < 0.2) {
+            val = Math.round(val);
+        }
+
+        elements.push({ type: mode, val: val });
+        draw();
+        
+        // Trigger mousemove to update tooltip immediately
+        canvas.dispatchEvent(new MouseEvent('mousemove', e));
+    });
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const centerY = canvas.height / 2;
+
+        // 1. Draw the segments
+        // We evaluate pixel by pixel from left to right to determine the color
+        for (let x = 0; x < canvas.width; x++) {
+            let val = xToVal(x);
+            let countRight = elements.filter(e => e.val > val).length;
+            
+            if (countRight % 2 === 1) {
+                // Odd count: Highlighted segment (Root Locus exists here)
+                ctx.fillStyle = '#ef4444'; // Red
+                ctx.fillRect(x, centerY - 3, 1, 6); 
+            } else {
+                // Even count: Standard axis
+                ctx.fillStyle = '#cbd5e1'; // Gray
+                ctx.fillRect(x, centerY - 1, 1, 2);
+            }
+        }
+
+        // 2. Draw axis ticks and numbers
+        ctx.fillStyle = '#64748b';
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        for (let i = minVal; i <= maxVal; i++) {
+            let px = valToX(i);
+            ctx.fillRect(px, centerY - 8, 1, 16);
+            if (i % 2 === 0) {
+                ctx.fillText(i, px, centerY + 12);
+            }
+        }
+
+        // 3. Draw Poles (X) and Zeros (O)
+        ctx.lineWidth = 2;
+        elements.forEach(el => {
+            let px = valToX(el.val);
+            let py = centerY;
+            
+            if (el.type === 'pole') {
+                ctx.strokeStyle = '#3b82f6'; // Blue for poles
+                const size = 6;
+                ctx.beginPath();
+                ctx.moveTo(px - size, py - size);
+                ctx.lineTo(px + size, py + size);
+                ctx.moveTo(px + size, py - size);
+                ctx.lineTo(px - size, py + size);
+                ctx.stroke();
+            } else {
+                ctx.strokeStyle = '#10b981'; // Green for zeros
+                const radius = 6;
+                ctx.beginPath();
+                ctx.arc(px, py, radius, 0, 2 * Math.PI);
+                ctx.stroke();
+            }
+        });
+    }
+
+    // Initial draw
+    draw();
+</script>
+
+</body>
+</html>
