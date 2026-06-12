@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Impacto do atraso no diagrama de Bode de fase</title>
+    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            padding: 20px;
+            /* ALTERADO: max-width passou de 900px para 95% para ocupar mais a tela */
+            max-width: 95%; 
+            margin: 0 auto;
+            color: #333;
+            line-height: 1.5;
+        }
+        .panel {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+            margin-bottom: 20px;
+        }
+        .info-panel h3 { margin-top: 0; color: #1f77b4; }
+        .info-panel ul { margin-bottom: 10px; }
+        .formula {
+            font-family: "Courier New", Courier, monospace;
+            background: #e9ecef;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        .control-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        input[type="range"] {
+            flex-grow: 1;
+            min-width: 200px;
+            cursor: pointer;
+        }
+        .metrics-readout {
+            background: #fff;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #cce5ff;
+            color: #004085;
+            font-weight: bold;
+        }
+        #plot {
+            width: 100%;
+            /* ALTERADO: Altura aumentada para 700px para acompanhar a nova largura */
+            height: 700px; 
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Impacto do atraso no diagrama de Bode de fase</h2>
+    <p>Ajuste o controle deslizante para ver como um atraso de tempo diminui linearmente a margem de fase em altas frequências.</p>
+
+    <div class="panel info-panel">
+        <p>A linha azul representa um sistema de segunda ordem sem atraso de tempo:</p>
+        <span class="formula">G<sub>0</sub>(s) = 100 / (s<sup>2</sup> + 10s + 100)</span>
+        <ul>
+            <li><strong>Frequência Natural (&omega;<sub>n</sub>):</strong> 10 rad/s</li>
+            <li><strong>Fator de Amortecimento (&zeta;):</strong> 0.5 (Subamortecido)</li>
+            <li><strong>Frequência de Corte (&omega;<sub>gc</sub>):</strong> 10 rad/s</li>
+        </ul>
+        <p>A linha vermelha representa um sistema de segunda ordem com atraso de tempo:</p>
+        <span class="formula">G(s) = G<sub>0</sub>(s) * e<sup>-sT<sub>d</sub></sup></span>
+    </div>
+
+    <div class="panel control-panel">
+        <label for="delaySlider" style="font-weight: bold;">
+            Atraso de Tempo (T<sub>d</sub>): <span id="delayVal" style="color: #d62728;">0.00</span> segundos
+        </label>
+        <div class="slider-container">
+            <span>0.0s</span>
+            <input type="range" id="delaySlider" min="0" max="0.5" step="0.01" value="0" aria-valuemin="0" aria-valuemax="0.5">
+            <span>0.5s</span>
+        </div>
+        <div class="metrics-readout" id="metricsReadout">
+            Perda de Fase em &omega; = 10 rad/s: 0.00&deg;
+        </div>
+    </div>
+
+    <div id="plot"></div>
+
+    <script>
+        // --- 1. SYSTEM PARAMETERS & LOGIC ---
+        const wn = 10;
+        const zeta = 0.5;
+        const w_gc = 10; 
+        
+        const frequencies = Array.from({length: 151}, (_, i) => Math.pow(10, -1 + i * 0.02));
+
+        function calculatePhase(td) {
+            return frequencies.map(w => {
+                const real = 1 - Math.pow(w / wn, 2);
+                const imag = 2 * zeta * (w / wn);
+                
+                let phase = -Math.atan2(imag, real) * (180 / Math.PI);
+                if (phase > 0) phase -= 360; 
+                
+                const delayDropDegrees = -w * td * (180 / Math.PI);
+                return phase + delayDropDegrees;
+            });
+        }
+
+        const baselinePhase = calculatePhase(0);
+
+        // --- 2. PLOTLY INITIALIZATION ---
+        const traceBaseline = {
+            x: frequencies,
+            y: baselinePhase,
+            type: 'scatter',
+            mode: 'lines',
+            name: 'G₀(s)',
+            line: { color: '#1f77b4', dash: 'dash', width: 2 },
+            hoverinfo: 'x+y'
+        };
+
+        const traceDelayed = {
+            x: frequencies,
+            y: calculatePhase(0),
+            type: 'scatter',
+            mode: 'lines',
+            name: 'G(s)',
+            line: { color: '#d62728', width: 3 },
+            hoverinfo: 'x+y'
+        };
+
+        const layout = {
+            title: 'Resposta de Fase vs. Frequência',
+            xaxis: { 
+                 type: 'log', 
+                 title: 'Frequência (rad/s)',
+                 gridcolor: '#e9ecef'
+            },
+            yaxis: { 
+                 title: 'Fase (graus)', 
+                 range: [-400, 0],
+                 dtick: 45,
+                 gridcolor: '#e9ecef'
+            },
+            plot_bgcolor: '#ffffff',
+            paper_bgcolor: '#ffffff',
+            margin: { t: 40, r: 20, b: 50, l: 60 },
+            hovermode: 'x unified',
+            shapes: [{
+                type: 'line',
+                x0: w_gc, x1: w_gc,
+                y0: -400, y1: 0,
+                line: { color: '#2ca02c', width: 1, dash: 'dot' }
+            }],
+            annotations: [{
+                x: Math.log10(w_gc),
+                y: -380,
+                xref: 'x', yref: 'y',
+                text: 'ω<sub>gc</sub> (10 rad/s)',
+                showarrow: false,
+                font: { color: '#2ca02c' }
+            }]
+        };
+
+        const config = { responsive: true };
+
+        Plotly.newPlot('plot', [traceBaseline, traceDelayed], layout, config);
+
+        // --- 3. EVENT HANDLING ---
+        const slider = document.getElementById('delaySlider');
+        const delayDisplay = document.getElementById('delayVal');
+        const metricsReadout = document.getElementById('metricsReadout');
+
+        slider.addEventListener('input', function(e) {
+            const td = parseFloat(e.target.value);
+            delayDisplay.innerText = td.toFixed(2);
+
+            const newPhase = calculatePhase(td);
+            Plotly.update('plot', { y: [newPhase] }, {}, [1]);
+
+            const phaseLossAtWgc = (w_gc * td * (180 / Math.PI)).toFixed(1);
+            metricsReadout.innerText = `Perda de Fase em ω = 10 rad/s: -${phaseLossAtWgc}°`;
+        });
+    </script>
+</body>
+</html>

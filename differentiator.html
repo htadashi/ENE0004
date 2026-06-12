@@ -1,0 +1,91 @@
+<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>Diferenciador Ideal vs Real</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+body {    font-family: Arial, sans-serif;    margin: 20px;}
+h2 {    text-align: center;}
+.blockDiagram {    display: flex;    justify-content: center;    align-items: center;    font-size: 26px;    margin-bottom: 25px;}
+.block {    width: 90px;    height: 60px;    border: 2px solid black;    display: flex;    align-items: center;    justify-content: center;    margin: 0 20px;    font-weight: bold;}
+.arrow {    font-size: 36px;}
+.controls {    margin-bottom: 25px;}
+.plotContainer {    display: grid;    grid-template-columns: repeat(auto-fit, minmax(400px,1fr));    gap: 15px;    width: 100%;}
+.plot {    height: 450px;}
+.info {    margin-top: 25px;    font-size: 18px;}
+.info table {    border-collapse: collapse;}
+.info td {    padding: 5px 20px 5px 0;}
+.explanation {    margin-top: 20px;    max-width: 2000px;    line-height: 1.5;}
+</style></head>
+<body>
+<h2>Diferenciador Ideal vs Diferenciador Real</h2>
+<div class="blockDiagram">
+    Entrada
+    <span class="arrow">→</span>
+    <div class="block">        s    </div>
+    <span class="arrow">→</span>
+    Saída
+</div>
+<div class="controls">
+    <label>        Inclinação da sigmoide (k):        <strong id="kLabel">1.0</strong>    </label>    <br>
+    <input        id="kSlider"        type="range"        min="0.5"        max="100"        step="0.5"        value="1"        style="width:500px;"    >
+    <br><br>
+    <label>        Constante de tempo do diferenciador real (τ):        <strong id="tauLabel">0.10</strong>    </label>    <br>
+    <input        id="tauSlider"        type="range"        min="0.01"        max="1"        step="0.01"        value="0.10"        style="width:500px;"    >
+</div>
+<div class="plotContainer">
+    <div id="inputPlot" class="plot"></div>
+    <div id="idealPlot" class="plot"></div>
+    <div id="realPlot" class="plot"></div>
+</div>
+<div class="info">
+<table>
+<tr><td><b>Pico da saída ideal:</b></td><td id="idealPeak">0</td></tr>
+<tr><td><b>Pico da saída real:</b></td><td id="realPeak">0</td></tr>
+</table>
+</div>
+<div class="explanation">
+<p>À medida que a sigmoide se torna mais íngreme, ela se aproxima de uma entrada ao degrau. O diferenciador ideal <b>G(s)=s</b> produz picos cada vez maiores. No limite de um degrau perfeito, a saída se torna um impulso de Dirac com amplitude infinita.</p>
+<p>O diferenciador realizável <b>G(s)=s/(τs+1)</b> contém uma atenuação de altas frequências que limita a amplitude da saída, ilustrando por que sistemas físicos não podem implementar uma diferenciação ideal.</p>
+</div>
+<script>
+const kSlider = document.getElementById("kSlider");const tauSlider = document.getElementById("tauSlider");
+const kLabel = document.getElementById("kLabel");const tauLabel = document.getElementById("tauLabel");
+const idealPeakLabel = document.getElementById("idealPeak");const realPeakLabel = document.getElementById("realPeak");
+const N = 4000;
+function sigmoid(t, k){    return 1 / (1 + Math.exp(-k * t));}
+function simulate(){    const k = parseFloat(kSlider.value);    const tau = parseFloat(tauSlider.value);
+    kLabel.innerText = k.toFixed(1);    tauLabel.innerText = tau.toFixed(2);
+    const T0 = -5;    const Tf = 5;
+    const dt = (Tf - T0) / (N - 1);
+    let t = [];    let x = [];
+    //-----------------------------------    // Entrada    //-----------------------------------
+    for(let i=0;i<N;i++)    {        const tt = T0 + i*dt;
+        t.push(tt);
+        x.push(            sigmoid(tt,k)        );    }
+    //-----------------------------------    // Diferenciador Ideal    //-----------------------------------
+    let ideal = [];
+    for(let i=0;i<N;i++)    {        const s = x[i];
+        ideal.push(            k * s * (1 - s)        );    }
+    //-----------------------------------    // Diferenciador Real    //    // τ y_dot + y = x_dot    //-----------------------------------
+    let real = [];
+    let y = 0;
+    real.push(y);
+    for(let i=1;i<N;i++)    {        const xdot =            (x[i] - x[i-1]) / dt;
+        const ydot =            (xdot - y) / tau;
+        y =            y + dt * ydot;
+        real.push(y);    }
+    //-----------------------------------    // Picos    //-----------------------------------
+    const idealPeak =        Math.max(...ideal);
+    const realPeak =        Math.max(...real);
+    idealPeakLabel.innerText =        idealPeak.toFixed(4);
+    realPeakLabel.innerText =        realPeak.toFixed(4);
+    //-----------------------------------    // Gráfico de Entrada    //-----------------------------------
+    Plotly.react(        "inputPlot",        [{            x:t,            y:x,            mode:"lines",            name:"Entrada"        }],        {            title:"Sinal de Entrada",            margin:{t:50},            xaxis:{                title:"Tempo"            },            yaxis:{                title:"Amplitude"            }        }    );
+    //-----------------------------------    // Saída Ideal    //-----------------------------------
+    Plotly.react(        "idealPlot",        [{            x:t,            y:ideal,            mode:"lines",            name:"Ideal"        }],        {            title:"Diferenciador Ideal  G(s)=s",            margin:{t:50},            xaxis:{                title:"Tempo"            },            yaxis:{                title:"Saída"            }        }    );
+    //-----------------------------------    // Saída Real    //-----------------------------------
+    Plotly.react(        "realPlot",        [{            x:t,            y:real,            mode:"lines",            name:"Real"        }],        {            title:"Diferenciador Real  G(s)=s/(τs+1)",            margin:{t:50},            xaxis:{                title:"Tempo"            },            yaxis:{                title:"Saída"            }        }    );}
+kSlider.addEventListener(    "input",    simulate);
+tauSlider.addEventListener(    "input",    simulate);
+simulate();
+</script>
+</body></html>
